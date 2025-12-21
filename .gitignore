@@ -1,0 +1,27 @@
+.DS_Store
+.env
+/node_modules/
+
+# React Router
+/.react-router/
+/build/
+.dockerignore
+
+# dependencies
+node_modules/
+
+# editors
+.idea/
+.vscode/
+
+# build output
+dist/
+build/
+
+# react-router cache
+.react-router/
+
+# env
+.env
+.env.local
+.env.*.local
