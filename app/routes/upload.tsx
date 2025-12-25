@@ -1,13 +1,31 @@
-import React from 'react'
+import React, { type FormEvent } from 'react'
 import { Navbar } from '~/components/Navbar'
 import { useState } from 'react'
 import { stat } from 'fs';
+import FileUploader from '~/components/FileUploader';
 
 function upload() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusText, setStatusText] = useState("");
+    const [file,setFile] = useState<File|null>(null);
+
+    const handleFileSelect = (file:File|null)=> {
+        setFile(file)
+    }
 
     const handleSubmit = (e: FormEvent<HTMLFormElement>)=>{
+        e.preventDefault();
+        const form = e.currentTarget.closest('form')
+        if(!form)return;
+        const formData = new FormData(form);
+
+        const companyName = formData.get('company-name');
+        const jobTitle = formData.get('job-title');
+        const jobDescription = formData.get('job-description');
+
+        console.log({
+            companyName, jobTitle, jobDescription, file
+        })
 
     }
 
@@ -52,7 +70,7 @@ function upload() {
 
                         <div className='form-div'>
                             <label htmlFor="uploader">Upload resume</label>
-                            <div>Uploader</div>
+                            <FileUploader onFileSelect={handleFileSelect}/>
                         </div>
 
                         <button className='primary-button' type = 'submit'>ANALYZE RESUME</button>
