@@ -4,7 +4,8 @@ import {usePuterStore} from "~/lib/puter";
 import Summary from "~/components/Summary";
 import ATS from "~/components/ATS";
 import Details from "~/components/Details";
-import {CURATED_MODELS} from "../../constants";
+import {CURATED_MODELS, RESUME_KV_PREFIX} from "../../constants";
+import {getPuterErrorMessage} from "~/lib/utils";
 
 export const meta = () => ([
     { title: 'CVly | Review' },
@@ -18,6 +19,7 @@ const Resume = () => {
     const [resumeUrl, setResumeUrl] = useState('');
     const [feedback, setFeedback] = useState<Feedback | null>(null);
     const [model, setModel] = useState<string | undefined>(undefined);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -26,28 +28,55 @@ const Resume = () => {
 
     useEffect(() => {
         const loadResume = async () => {
-            const resume = await kv.get(`resume:${id}`);
+            try {
+                const resume = await kv.get(`${RESUME_KV_PREFIX}${id}`);
 
-            if(!resume) return;
+                if(!resume) {
+                    setLoadError("This resume couldn't be found. It may have been deleted.");
+                    return;
+                }
 
-            const data = JSON.parse(resume);
+                const data = JSON.parse(resume);
 
-            const [resumeBlob, imageBlob] = await Promise.all([
-                fs.read(data.resumePath),
-                fs.read(data.imagePath),
-            ]);
+                const [resumeBlob, imageBlob] = await Promise.all([
+                    fs.read(data.resumePath),
+                    fs.read(data.imagePath),
+                ]);
 
-            if(!resumeBlob || !imageBlob) return;
+                if(!resumeBlob || !imageBlob) {
+                    setLoadError("This resume's files are missing. It may have been deleted.");
+                    return;
+                }
 
-            const pdfBlob = new Blob([resumeBlob], { type: 'application/pdf' });
-            const resumeUrl = URL.createObjectURL(pdfBlob);
-            setResumeUrl(resumeUrl);
+                const pdfBlob = new Blob([resumeBlob], { type: 'application/pdf' });
+                const resumeUrl = URL.createObjectURL(pdfBlob);
+                setResumeUrl(resumeUrl);
 
-            const imageUrl = URL.createObjectURL(imageBlob);
-            setImageUrl(imageUrl);
+                const imageUrl = URL.createObjectURL(imageBlob);
+                setImageUrl(imageUrl);
 
-            setFeedback(data.feedback);
-            setModel(data.model);
+                setFeedback(data.feedback);
+                setModel(data.model);
+            } catch (err) {
+                const message = getPuterErrorMessage(err, "Something went wrong loading this resume.");
+
+                // subject_does_not_exist means the files are genuinely gone -
+                // most likely an orphaned record left behind by a delete that
+                // removed the files but failed to remove the KV entry (see the
+                // kv.del fix). Clean it up now so it stops showing up on Home.
+                if (message.includes('subject_does_not_exist') || message.includes('not found')) {
+                    setLoadError("This resume's files no longer exist. Removing its stale entry...");
+                    try {
+                        await kv.delete(`${RESUME_KV_PREFIX}${id}`);
+                        setLoadError("This resume's files no longer exist, and its stale entry has been removed.");
+                    } catch {
+                        // Best-effort cleanup - if this also fails, the message
+                        // above still tells the user what's going on.
+                    }
+                } else {
+                    setLoadError(message);
+                }
+            }
         }
 
         loadResume();
@@ -88,6 +117,13 @@ const Resume = () => {
                             <Summary feedback={feedback} />
                             <ATS score={feedback.ATS.score || 0} suggestions={feedback.ATS.tips || []} />
                             <Details feedback={feedback} />
+                        </div>
+                    ) : loadError ? (
+                        <div className="flex flex-col items-center gap-4 pt-8 text-center">
+                            <p style={{ color: "var(--ink)" }}>{loadError}</p>
+                            <Link to="/" className="ghost-button w-fit text-base px-6">
+                                Back to your resumes
+                            </Link>
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-4 pt-8">
